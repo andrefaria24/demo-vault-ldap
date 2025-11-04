@@ -1,0 +1,19 @@
+services:
+  vault-agent:
+    image: hashicorp/vault:${VAULT_VERSION}
+    container_name: vault-agent
+    restart: unless-stopped
+
+    env_file:
+      - ./.env
+
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR}
+      VAULT_NAMESPACE: ${VAULT_NAMESPACE:-}
+
+    working_dir: /config
+
+    command: ["vault", "agent", "-config=/config/vault-agent.hcl", "-log-level=info"]
+
+    volumes:
+      - ./config:/config

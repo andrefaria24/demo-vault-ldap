@@ -1,0 +1,6 @@
+**/.env
+**/vault-token
+**/vault-agent.pid
+**/role_id
+**/secret_id
+**/ad-creds.json
