@@ -1,6 +1,6 @@
 param(
   [string]$MountPoint = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_LDAP_MOUNT)) { $env:VAULT_LDAP_MOUNT } else { 'ldap' }),
-  [string]$RoleName = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_LDAP_ROLE)) { $env:VAULT_LDAP_ROLE } else { 'python-dynamic' })
+  [string]$RoleName = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_LDAP_ROLE)) { $env:VAULT_LDAP_ROLE } else { 'powershell-dynamic' })
 )
 
 Set-StrictMode -Version Latest
@@ -83,24 +83,27 @@ $candidateUsernames = $candidateUsernames | Select-Object -Unique
 Write-Host ("Trying username variants: " + ($candidateUsernames -join ', '))
 if ($ttl) { Write-Host "Credential TTL (seconds): $ttl" }
 
-$inner = @'
-New-Item -ItemType Directory -Path "C:\dev" -Force | Out-Null
-New-Item -ItemType File -Path "C:\dev\hello_world_ldap_dynamic.txt" -Force | Out-Null
-Write-Host "Created file: C:\dev\hello_world_ldap_dynamic.txt"
-'@
-
-$argList = @(
-  '-NoProfile',
-  '-NonInteractive',
-  '-Command',
-  $inner
-)
+# We will attempt each username variant; for the successful one, write creds to file
 
 $lastError = $null
 foreach ($u in $candidateUsernames) {
   Write-Host "Attempting logon as: $u"
   $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
   $cred = New-Object System.Management.Automation.PSCredential ($u, $securePassword)
+  # Build per-attempt command embedding the selected username and password
+  $fileContent = "username=$u`npassword=$password"
+  $fileContentB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($fileContent))
+  $inner = @"
+New-Item -ItemType Directory -Path 'C:\dev' -Force | Out-Null
+[IO.File]::WriteAllText('C:\dev\hello_world_ldap-dynamic.txt',[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$fileContentB64')))
+Write-Host 'Wrote credentials to C:\dev\hello_world_ldap-dynamic.txt'
+"@
+  $argList = @(
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    $inner
+  )
   try {
     $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Credential $cred -PassThru -Wait -WindowStyle Hidden -ErrorAction Stop
     if ($p.ExitCode -eq 0) {

@@ -1,6 +1,6 @@
 param(
   [string]$MountPoint = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_KV_MOUNT)) { $env:VAULT_KV_MOUNT } else { 'kv' }),
-  [string]$SecretPath = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_KV_PATH)) { $env:VAULT_KV_PATH } else { 'python_app' })
+  [string]$SecretPath = $(if (-not [string]::IsNullOrWhiteSpace($env:VAULT_KV_PATH)) { $env:VAULT_KV_PATH } else { 'powershell_helloworld_app' })
 )
 
 Set-StrictMode -Version Latest
@@ -55,11 +55,15 @@ Write-Host "Using credential for user: $username"
 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential ($username, $securePassword)
 
-$inner = @'
-New-Item -ItemType Directory -Path "C:\dev" -Force | Out-Null
-New-Item -ItemType File -Path "C:\dev\hello_world.txt" -Force | Out-Null
-Write-Host "Created file: C:\dev\hello_world.txt"
-'@
+# Prepare file content and embed via Base64 to avoid quoting issues
+$fileContent = "username=$username`npassword=$password"
+$fileContentB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($fileContent))
+
+$inner = @"
+New-Item -ItemType Directory -Path 'C:\dev' -Force | Out-Null
+[IO.File]::WriteAllText('C:\dev\hello_world-kv.txt',[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$fileContentB64')))
+Write-Host 'Wrote credentials to C:\dev\hello_world-kv.txt'
+"@
 
 $argList = @('-NoProfile', '-NonInteractive', '-Command', $inner)
 
